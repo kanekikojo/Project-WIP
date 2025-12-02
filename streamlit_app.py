@@ -1,7 +1,13 @@
 import streamlit as st
 import pandas as pd
 import json
-from predict_rating import load_and_clean_data, train_model
+import numpy as np
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import TruncatedSVD
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
 
 # Page config
 st.set_page_config(
@@ -75,6 +81,21 @@ st.markdown("""
         text-align: center;
         margin-top: 2rem;
     }
+
+    
+    .rating-value {
+        font-size: 4rem;
+        font-family: 'Playfair Display', serif;
+        color: #d4af37;
+        font-weight: 700;
+    }
+    
+    .verdict {
+        font-size: 1.5rem;
+        color: #f0f0f0;
+        margin-top: 1rem;
+    }
+</style>
     
     .rating-value {
         font-size: 4rem;
@@ -91,11 +112,69 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Load model
+# Load and train model
 @st.cache_resource
 def get_model():
-    df = load_and_clean_data(r"c:\Users\pc\OneDrive\Documents\Fragrantica\fra_cleaned.csv")
-    return train_model(df)
+    """Loads data and trains the model"""
+    try:
+        # Load data with relative path
+        df = pd.read_csv('fra_cleaned.csv', sep=';', encoding='latin-1')
+        
+        # Clean Rating Value
+        if df['Rating Value'].dtype == object:
+            df['Rating Value'] = df['Rating Value'].str.replace(',', '.').astype(float)
+        
+        # Clean Rating Count
+        df['Rating Count'] = pd.to_numeric(df['Rating Count'], errors='coerce').fillna(0)
+        
+        # Drop rows with missing data
+        df = df.dropna(subset=['Rating Value', 'Rating Count', 'Gender'])
+        
+        # Filter for reliable data
+        df = df[df['Rating Count'] >= 10].copy()
+        
+        # Combine features
+        accord_cols = [f'mainaccord{i}' for i in range(1, 6)]
+        
+        def combine_features(row):
+            parts = []
+            for col in accord_cols:
+                if pd.notna(row.get(col)):
+                    parts.append(str(row[col]).replace(' ', '_'))
+            for col in ['Top', 'Middle', 'Base']:
+                if pd.notna(row.get(col)):
+                    notes = [n.strip().replace(' ', '_') for n in str(row[col]).split(',')]
+                    parts.extend(notes)
+            return ' '.join(parts)
+
+        df['Composition'] = df.apply(combine_features, axis=1)
+        
+        # Prepare data
+        X = df[['Gender', 'Composition']]
+        y = df['Rating Value']
+        
+        # Build pipeline
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ('gender', OneHotEncoder(handle_unknown='ignore', sparse_output=False), ['Gender']),
+                ('composition', Pipeline([
+                    ('tfidf', TfidfVectorizer(min_df=5, max_features=5000)),
+                    ('svd', TruncatedSVD(n_components=100, random_state=42))
+                ]), 'Composition'),
+            ]
+        )
+        
+        pipeline = Pipeline([
+            ('preprocessor', preprocessor),
+            ('regressor', HistGradientBoostingRegressor(max_iter=300, random_state=42, learning_rate=0.1, max_depth=10))
+        ])
+        
+        # Train
+        pipeline.fit(X, y)
+        return pipeline
+    except Exception as e:
+        st.error(f"Error loading model: {e}")
+        return None
 
 # Load dropdown data
 @st.cache_data
