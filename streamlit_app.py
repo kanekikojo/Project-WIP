@@ -187,8 +187,9 @@ def get_model():
         return None
 
 # Load dropdown data
-@st.cache_data
+@st.cache_data(ttl=3600)  # Cache for 1 hour, then reload
 def get_dropdown_data():
+    """Loads dropdown options from JSON file"""
     with open('web_data.json', 'r', encoding='utf-8') as f:
         return json.load(f)
 
