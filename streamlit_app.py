@@ -166,7 +166,7 @@ def get_model():
         
         pipeline = Pipeline([
             ('preprocessor', preprocessor),
-            ('regressor', HistGradientBoostingRegressor(max_iter=300, random_state=42, learning_rate=0.1, max_depth=10))
+            ('regressor', HistGradientBoostingRegressor(max_iter=500, random_state=42, learning_rate=0.1, max_depth=10))
         ])
         
         # Train
