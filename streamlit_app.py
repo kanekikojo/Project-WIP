@@ -96,20 +96,6 @@ st.markdown("""
         margin-top: 1rem;
     }
 </style>
-    
-    .rating-value {
-        font-size: 4rem;
-        font-family: 'Playfair Display', serif;
-        color: #d4af37;
-        font-weight: 700;
-    }
-    
-    .verdict {
-        font-size: 1.5rem;
-        color: #f0f0f0;
-        margin-top: 1rem;
-    }
-</style>
 """, unsafe_allow_html=True)
 
 # Load and train model
