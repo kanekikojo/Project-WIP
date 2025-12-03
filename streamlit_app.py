@@ -100,6 +100,32 @@ st.markdown("""
 
 # Load and train model
 @st.cache_resource
+def get_model():
+    """Loads data and trains the advanced model"""
+    try:
+        # Load data with relative path
+        df = pd.read_csv('fra_cleaned.csv', sep=';', encoding='latin-1')
+        
+        # Clean Rating Value
+        if df['Rating Value'].dtype == object:
+            df['Rating Value'] = df['Rating Value'].str.replace(',', '.').astype(float)
+        
+        # Clean Rating Count
+        df['Rating Count'] = pd.to_numeric(df['Rating Count'], errors='coerce').fillna(0)
+        
+        # Drop rows with missing data
+        df = df.dropna(subset=['Rating Value', 'Rating Count', 'Gender'])
+        
+        # Filter for reliable data (Increased to 50 votes as requested)
+        df = df[df['Rating Count'] >= 50].copy()
+        
+        # ACCORD STRENGTH: Weight accords by position (5x for 1st, 1x for 5th)
+        accord_cols = [f'mainaccord{i}' for i in range(1, 6)]
+        weights = [5, 4, 3, 2, 1]
+        
+        weighted_accords = []
+        for idx, row in df.iterrows():
+            accord_parts = []
             for i, col in enumerate(accord_cols):
                 if pd.notna(row.get(col)):
                     accord = str(row[col]).replace(' ', '_')
@@ -260,9 +286,17 @@ try:
                 gen_accords = style_map.get(style, [style, 'aromatic'])
                 
                 # 2. Map Longevity to Base Notes
-                long_lasting = ['ambroxan', 'iso_e_super', 'musk', 'amber']
-                moderate = ['cedar', 'sandalwood', 'vetiver']
-                gen_base = long_lasting if '12' in st.session_state.chat_data['longevity'] or 'all day' in st.session_state.chat_data['longevity'] else moderate
+                longevity_input = st.session_state.chat_data['longevity']
+                
+                if any(x in longevity_input for x in ['12', 'all day', 'long', 'eternal', 'beast']):
+                    # Intense/Long-Lasting
+                    gen_base = ['ambroxan', 'musk', 'amber', 'vanilla']
+                elif any(x in longevity_input for x in ['short', 'light', 'brief', 'cologne', 'fresh']):
+                    # Light/Short (Eau de Cologne style)
+                    gen_base = ['white_musk', 'driftwood', 'cedar']
+                else:
+                    # Moderate (Default)
+                    gen_base = ['sandalwood', 'vetiver', 'patchouli']
                 
                 # 3. Add Hero Note
                 gen_top = [hero] if hero in ['bergamot', 'lemon', 'citrus'] else []
